@@ -14,26 +14,36 @@ export async function signUpWithEmail(
   password: string,
   fullName: string,
 ) {
-  const { data, error } = await supabase.auth.signUp({
+  const { data, error: authError } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: {
         full_name: fullName,
+        avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
       },
     },
   });
-  if (error) throw error;
 
-  // Create user profile in the users table
-  if (data.user) {
-    const { error: profileError } = await supabase.auth.updateUser({
-      data: {
-        full_name: fullName,
-        avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.user.id}`,
-      },
+  if (authError) {
+    throw authError;
+  }
+
+  // *AFTER* successful signup, get the user's UUID.
+  if (data?.user?.id) {
+    const { error: profileError } = await supabase.from("users").insert({
+      id: data.user.id,
+      email: email,
+      full_name: fullName,
+      avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
     });
-    if (profileError) throw profileError;
+
+    if (profileError) {
+      console.error("Error creating user profile:", profileError);
+      throw profileError;
+    }
+  } else {
+    throw new Error("User creation failed: no user ID returned.");
   }
 
   return data;
